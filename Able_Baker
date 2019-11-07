@@ -1,0 +1,225 @@
+//Server.cpp:
+
+#include<iostream>
+#include<stdlib.h>
+#include<time.h>
+
+class Server {
+    public: int whenAvailable = 0;
+    static double serviceProb[4][2];
+    static int endTime;
+
+    public: Server(char server){
+        if(server == 'a'){
+           ableServiceTime();
+        }
+        else if(server == 'b'){
+           bakerServiceTime();
+        }
+    }
+    static void ableServiceTime(){
+       serviceProb[0][0] = 0.3;
+       serviceProb[1][0] = 0.28;
+       serviceProb[2][0] = 0.25;
+       serviceProb[3][0] = 0.17;
+       serviceProb[0][1] = serviceProb[0][0];
+       serviceProb[1][1] = serviceProb[0][1]+serviceProb[1][0];
+       serviceProb[2][1] = serviceProb[1][1]+serviceProb[2][0];
+       serviceProb[3][1] = serviceProb[2][1]+serviceProb[3][0];
+    }
+    static void bakerServiceTime(){
+       serviceProb[0][0] = 0.35;
+       serviceProb[1][0] = 0.25;
+       serviceProb[2][0] = 0.2;
+       serviceProb[3][0] = 0.2;
+       serviceProb[0][1] = serviceProb[0][0];
+       serviceProb[1][1] = serviceProb[0][1]+serviceProb[1][0];
+       serviceProb[2][1] = serviceProb[1][1]+serviceProb[2][0];
+       serviceProb[3][1] = serviceProb[2][1]+serviceProb[3][0];
+    }
+    public: int serviceTime(char server){
+        double rNumber = (rand() % 10000) / 10000.0;
+        int tempTime=0;
+        for(int i = 0 ; i <=3; i++){
+            if(rNumber <= serviceProb[i][1]){
+                tempTime = i;
+                break;
+            }
+        }
+
+        int aTime = 0;
+        if(server == 'a'){
+            aTime = tempTime+2;
+        }
+        else if(server == 'b'){
+            aTime = tempTime+3;
+        }
+        return aTime;
+    }
+};
+double Server::serviceProb[4][2];
+
+//Customer.cpp
+
+#include<iostream>
+#include<stdlib.h>
+#include<time.h>
+class Customer {
+    public: int arrivalTime;
+    public: int serviceStartTime;
+    public: int serviceTime;
+    public: int customerNum;
+    public: int endTime;
+    static double interarrivalProb[5][2];
+
+    public: Customer(){
+
+        interarrivalTable();
+        double rTempOne = (rand() % 10000) / 10000.0;
+        for(int i = 1 ; i <=4; i++){
+            if(rTempOne <= interarrivalProb[i][1]){
+                arrivalTime = i;
+               break;
+            }
+        }
+    }
+
+    static void interarrivalTable(){
+       interarrivalProb[1][0] = 0.25;
+       interarrivalProb[2][0] = 0.4;
+       interarrivalProb[3][0] = 0.2;
+       interarrivalProb[4][0] = 0.15;
+       interarrivalProb[1][1] = interarrivalProb[1][0];
+       interarrivalProb[2][1] = interarrivalProb[1][1]+interarrivalProb[2][0];
+       interarrivalProb[3][1] = interarrivalProb[2][1]+interarrivalProb[3][0];
+       interarrivalProb[4][1] = interarrivalProb[3][1]+interarrivalProb[4][0];
+    }
+
+};
+double Customer::interarrivalProb[5][2];
+
+
+Main.cpp:
+
+#include <iostream>
+#include "Customer.cpp"
+#include "Server.cpp"
+#include <queue>
+#include<string>
+using namespace std;
+
+
+static void update();
+static void analytics();
+static Customer Customers[10];
+static Server Able = Server('a');
+static Server Baker = Server('b');
+static int cumulativeInterarrival = 0;
+static string server;
+static int queueLength=0;
+queue <Customer> customerQueue;
+int main()
+{
+    Customers[0] = Customer();
+    Customers[0].arrivalTime = 0;
+    Customers[0].serviceStartTime = 0;
+    Customers[0].serviceTime = Able.serviceTime('a');
+    server = "      Able";
+    Customers[0].endTime = Customers[0].serviceTime;
+    Able.whenAvailable = Customers[0].serviceTime;
+
+        cout<< "Cust    Inter   Cummu   Able    Baker   Serve   Start   Server  EndTime"<<endl;
+        cout<< "1        " <<Customers[0].arrivalTime<< "      "<<
+                cumulativeInterarrival<<"        "<< Able.whenAvailable+ "        " <<
+                Baker.whenAvailable<<"       "<<Customers[0].serviceTime+
+                "       "<<Customers[0].serviceStartTime << server << "        "<< Customers[0].endTime<<endl;
+
+        for(int i = 1; i < 10; i++){
+            Customers[i]= Customer();
+            int tempI=i;
+
+            cumulativeInterarrival += Customers[i].arrivalTime;
+            update();
+
+            //If Able frees up
+            if(Able.whenAvailable <= Baker.whenAvailable
+                   && Able.whenAvailable <= cumulativeInterarrival){
+
+                Able.whenAvailable = Able.whenAvailable + Customers[i].serviceTime;
+
+                Customers[i].serviceStartTime = cumulativeInterarrival;
+                Customers[i].serviceTime = Able.serviceTime('a');
+                Able.whenAvailable = cumulativeInterarrival
+                        + Customers[i].serviceTime;
+                Customers[i].endTime = Customers[i].serviceStartTime + Customers[i].serviceTime;
+
+            //If Baker frees up
+            } else if (Baker.whenAvailable <= cumulativeInterarrival){
+                Baker.whenAvailable = Baker.whenAvailable + Customers[i].serviceTime;
+                Customers[i].serviceStartTime = cumulativeInterarrival;
+                Customers[i].serviceTime = Baker.serviceTime('b');
+                Baker.whenAvailable = cumulativeInterarrival
+                        + Customers[i].serviceTime;
+                 Customers[i].endTime = Customers[i].serviceStartTime + Customers[i].serviceTime;
+            //If neither free up, add them to the Queue
+            } else {
+                customerQueue.push(Customers[i]);
+                queueLength ++;
+                i--;
+            }
+
+            if( Customers[i].serviceTime == Able.serviceTime('a'))
+            {
+                server = "Able";
+            }
+            else
+            {
+                server = "Baker";
+            }
+
+            if(tempI == i){
+            cout<< i + 1 << "        " <<Customers[i].arrivalTime<<"       "<<
+                    cumulativeInterarrival<<"        "<<Able.whenAvailable<<"      "<<
+                    Baker.whenAvailable<<"       "<<Customers[i].serviceTime<<"        "<<
+                    Customers[i].serviceStartTime << "       " << server <<
+                    "       " << Customers[i].endTime<<endl;
+            }
+        }
+
+    return 0;
+}
+
+    static void update(){
+        Customer newCustomer;
+        while(!customerQueue.empty()){
+            if(Able.whenAvailable <= Baker.whenAvailable
+                   && Able.whenAvailable <= cumulativeInterarrival){
+                newCustomer = customerQueue.front();
+                customerQueue.pop();
+                queueLength--;
+                newCustomer.serviceTime = Able.serviceTime('a');
+                Able.whenAvailable = Able.whenAvailable + newCustomer.serviceTime;
+            } else if (Baker.whenAvailable <= cumulativeInterarrival){
+                newCustomer = customerQueue.front();
+                customerQueue.pop();
+                queueLength--;
+                newCustomer.serviceTime = Baker.serviceTime('b');
+                Baker.whenAvailable = Baker.whenAvailable + newCustomer.serviceTime;
+            } else {
+                break;
+            }
+        }
+    }
+
+    static void analytics(){
+            int waitingTimeSum = 0;
+            int serviceTimeSum = 0;
+            int arrivalTimeSum = 0;
+            int inSystemTimeSum = 0;
+            for(int i = 0; i<10; i++){
+                serviceTimeSum+=Customers[i].serviceTime;
+                waitingTimeSum+=(Customers[i].serviceStartTime-Customers[i].arrivalTime);
+                arrivalTimeSum+=Customers[i].arrivalTime;
+                inSystemTimeSum+=(Customers[i].endTime-Customers[i].arrivalTime);
+            }
+    }
